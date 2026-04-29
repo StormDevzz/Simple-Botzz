@@ -44,6 +44,11 @@ pub fn build_bot_from_prompt(params: BotPromptParams, existing_bots_count: usize
         use_generated_script: true,
         auto_login: params.auto_login,
         auto_login_password: String::new(),
+        auto_register: false,
+        auto_register_password: String::new(),
+        auto_register_twice: false,
+        connection_delay: 0,
+        minecraft_version: "1.20.4".to_string(),
         auto_messages: params.auto_messages,
     }
 }

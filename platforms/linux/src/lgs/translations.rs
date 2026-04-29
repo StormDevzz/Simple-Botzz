@@ -133,6 +133,18 @@ impl Translator {
         map.insert("min_interval".to_string(), "Мин. интервал (мс):".to_string());
         map.insert("check_ai".to_string(), "Проверить ИИ".to_string());
         map.insert("ai_check_result".to_string(), "Результат проверки ИИ:".to_string());
+        map.insert("theme_settings".to_string(), "Настройки темы".to_string());
+        map.insert("background_color".to_string(), "Цвет фона:".to_string());
+        map.insert("panel_color".to_string(), "Цвет панели:".to_string());
+        map.insert("text_color".to_string(), "Цвет текста:".to_string());
+        map.insert("accent_color".to_string(), "Акцентный цвет:".to_string());
+        map.insert("button_color".to_string(), "Цвет кнопки:".to_string());
+        map.insert("border_color".to_string(), "Цвет границы:".to_string());
+        map.insert("auto_register".to_string(), "Авто-регистрация".to_string());
+        map.insert("auto_register_password".to_string(), "Пароль для регистрации:".to_string());
+        map.insert("auto_register_twice".to_string(), "Вводить пароль 2 раза:".to_string());
+        map.insert("connection_delay".to_string(), "Задержка подключения (сек):".to_string());
+        map.insert("minecraft_version".to_string(), "Версия Minecraft:".to_string());
         map
     }
 
@@ -221,6 +233,18 @@ impl Translator {
         map.insert("min_interval".to_string(), "Min interval (ms):".to_string());
         map.insert("check_ai".to_string(), "Check AI".to_string());
         map.insert("ai_check_result".to_string(), "AI check result:".to_string());
+        map.insert("theme_settings".to_string(), "Theme Settings".to_string());
+        map.insert("background_color".to_string(), "Background color:".to_string());
+        map.insert("panel_color".to_string(), "Panel color:".to_string());
+        map.insert("text_color".to_string(), "Text color:".to_string());
+        map.insert("accent_color".to_string(), "Accent color:".to_string());
+        map.insert("button_color".to_string(), "Button color:".to_string());
+        map.insert("border_color".to_string(), "Border color:".to_string());
+        map.insert("auto_register".to_string(), "Auto-register".to_string());
+        map.insert("auto_register_password".to_string(), "Register password:".to_string());
+        map.insert("auto_register_twice".to_string(), "Enter password twice:".to_string());
+        map.insert("connection_delay".to_string(), "Connection delay (sec):".to_string());
+        map.insert("minecraft_version".to_string(), "Minecraft version:".to_string());
         map
     }
 }

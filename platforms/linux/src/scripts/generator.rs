@@ -19,15 +19,46 @@ const auth = 'microsoft';
     };
 
     let auto_login_section = if bot.auto_login {
-        r#"// Авто-логин включен
-function autoLogin() {
+        format!(r#"// Авто-логин включен
+function autoLogin() {{
     console.log("Авто-логин...");
-    // Логика авто-логина для Minecraft сервера
-    connectToServer();
-}
-"#
+    sendChatMessage('/login {}');
+}}
+"#, bot.auto_login_password)
     } else {
-        "// Авто-логин отключен\n"
+        "// Авто-логин отключен\n".to_string()
+    };
+
+    let auto_register_section = if bot.auto_register {
+        let register_cmd = if bot.auto_register_twice {
+            format!(r#"// Авто-регистрация (пароль 2 раза)
+function autoRegister() {{
+    console.log("Авто-регистрация...");
+    sendChatMessage('/register {}');
+    sendChatMessage('/register {}');
+}}
+"#, bot.auto_register_password, bot.auto_register_password)
+        } else {
+            format!(r#"// Авто-регистрация (пароль 1 раз)
+function autoRegister() {{
+    console.log("Авто-регистрация...");
+    sendChatMessage('/register {}');
+}}
+"#, bot.auto_register_password)
+        };
+        register_cmd
+    } else {
+        "// Авто-регистрация отключена\n".to_string()
+    };
+
+    let connection_delay_section = if bot.connection_delay > 0 {
+        format!(r#"// Задержка перед подключением: {} сек
+setTimeout(() => {{
+    connectToServer();
+}}, {} * 1000);
+"#, bot.connection_delay, bot.connection_delay)
+    } else {
+        "// Без задержки подключения\n".to_string()
     };
 
     let auto_messages_section = if !bot.auto_messages.is_empty() {
@@ -53,60 +84,115 @@ function sendAutoMessages() {{
 // USERNAME - {}
 // PASSWORD - {}
 // ACCOUNT_TYPE - {:?}
+// MINECRAFT_VERSION - {}
 
+const mineflayer = require('mineflayer');
 const botId = process.env.BOT_ID;
 const botName = process.env.BOT_NAME;
 const server = process.env.SERVER;
-const port = process.env.PORT;
+const port = parseInt(process.env.PORT);
 const username = process.env.USERNAME;
+const password = process.env.PASSWORD;
+const accountType = process.env.ACCOUNT_TYPE;
+const minecraftVersion = process.env.MINECRAFT_VERSION || '1.20.4';
 
 console.log(`=== Запуск бота ${{botName}} ===`);
 console.log(`ID: ${{botId}}`);
 console.log(`Сервер: ${{server}}:${{port}}`);
 console.log(`Пользователь: ${{username}}`);
+console.log(`Версия: ${{minecraftVersion}}`);
 console.log('===========================');
 
 {}
-// Подключение к серверу Minecraft
-function connectToServer() {{
-    console.log(`Подключение к серверу ${{server}}:${{port}}...`);
+
+// Создаем клиента mineflayer
+const bot = mineflayer.createBot({{
+    host: server,
+    port: port,
+    username: username,
+    password: password,
+    auth: accountType === 'Online' ? 'microsoft' : 'offline',
+    version: minecraftVersion,
+}});
+
+bot.on('connect', () => {{
+    console.log('[OK] Подключено к серверу!');
+}});
+
+bot.on('login', () => {{
+    console.log('[OK] Успешный вход на сервер!');
     
-    // Здесь должна быть реальная логика подключения к Minecraft серверу
-    // Используйте библиотеку mineflayer или подобную
+    // Авто-регистрация
+    {}
     
     // Авто-логин
     {}
     
-    console.log("Подключение к серверу...");
-}}
+    // Авто-сообщения
+    {}
+}});
+
+bot.on('error', (err) => {{
+    console.error('[ERROR]', err);
+}});
+
+bot.on('end', () => {{
+    console.log('[INFO] Соединение закрыто');
+}});
+
+bot.on('kicked', (reason) => {{
+    console.log('[KICKED]', reason);
+}});
 
 // Отправка сообщения в чат
 function sendChatMessage(message) {{
-    console.log(`[Чат] ${{username}}: ${{message}}`);
-    // Реальная отправка сообщения на сервер
+    if (bot) {{
+        bot.chat(message);
+    }}
 }}
 
 // Основной цикл бота
-function botLoop() {{
+setInterval(() => {{
     const timestamp = new Date().toISOString();
     console.log(`[${{timestamp}}] Бот ${{botName}} работает...`);
-    
-    // Ваша логика здесь
-}}
-
-// Запуск
-connectToServer();
-{}
-setInterval(botLoop, 5000);
+}}, 5000);
 
 // Обработка завершения работы
 process.on('SIGINT', () => {{
     console.log(`\nБот ${{botName}} останавливается...`);
+    if (bot) {{
+        bot.quit();
+    }}
     process.exit(0);
 }});
 
 console.log('Бот успешно инициализирован!');
-"#, bot.name, bot.id, bot.name, bot.server, bot.port, bot.username, "***", bot.account_type, account_section, auto_login_section, auto_messages_section)
+"#, bot.name, bot.id, bot.name, bot.server, bot.port, bot.username, "***", bot.account_type, bot.minecraft_version, account_section, 
+if bot.auto_register {
+    format!("    setTimeout(() => {{\n        sendChatMessage('/register {}');\n        {}\n    }}, 1000);", 
+        bot.auto_register_password,
+        if bot.auto_register_twice {
+            format!("        sendChatMessage('/register {}');", bot.auto_register_password)
+        } else {
+            String::new()
+        })
+    } else {
+        String::new()
+    },
+if bot.auto_login {
+    format!("    setTimeout(() => {{\n        sendChatMessage('/login {}');\n    }}, 2000);", bot.auto_login_password)
+} else {
+    String::new()
+},
+if !bot.auto_messages.is_empty() {
+    let msgs = bot.auto_messages.iter()
+        .map(|m| format!("        sendChatMessage('{}');", m))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("    setTimeout(() => {{\n{}\n    }}, 3000);", msgs)
+} else {
+    String::new()
+})
 }
 
 /// Возвращает базовый шаблон скрипта

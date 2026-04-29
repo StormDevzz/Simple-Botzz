@@ -51,6 +51,7 @@ impl BotProcess {
             .env("USERNAME", &bot.username)
             .env("PASSWORD", &bot.password)
             .env("ACCOUNT_TYPE", format!("{:?}", bot.account_type))
+            .env("MINECRAFT_VERSION", &bot.minecraft_version)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;

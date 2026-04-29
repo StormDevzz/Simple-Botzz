@@ -1,0 +1,11 @@
+# Discord Rich Presence Configuration
+# Copy this file to discord_config.toml and fill in your values
+
+# Discord Application Client ID
+client_id = "1499150170800263250"
+
+# Discord Application Public Key
+public_key = "5bfe2336f87838f17b2e5fdb93b015f0b8e8da006a6715de4af29410b37cecc7"
+
+# Enable Discord Rich Presence
+enabled = false

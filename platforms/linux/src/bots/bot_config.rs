@@ -49,6 +49,16 @@ pub struct BotConfig {
     pub auto_login: bool,
     /// Пароль для авто-логина
     pub auto_login_password: String,
+    /// Авто-регистрация при подключении
+    pub auto_register: bool,
+    /// Пароль для авто-регистрации
+    pub auto_register_password: String,
+    /// Нужно ли вводить пароль 2 раза при регистрации
+    pub auto_register_twice: bool,
+    /// Задержка перед подключением (в секундах)
+    pub connection_delay: u32,
+    /// Версия Minecraft
+    pub minecraft_version: String,
     /// Авто-сообщения при входе
     pub auto_messages: Vec<String>,
 }

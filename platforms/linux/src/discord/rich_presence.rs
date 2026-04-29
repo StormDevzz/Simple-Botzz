@@ -14,10 +14,13 @@ pub struct DiscordConfig {
 
 impl Default for DiscordConfig {
     fn default() -> Self {
+        // Загружаем из переменных окружения или .env файла
+        let (client_id, public_key, enabled) = crate::discord::discord_config_loader::load_discord_config();
+        
         Self {
-            client_id: "1499150170800263250".to_string(),
-            public_key: "5bfe2336f87838f17b2e5fdb93b015f0b8e8da006a6715de4af29410b37cecc7".to_string(),
-            enabled: false,
+            client_id,
+            public_key,
+            enabled,
         }
     }
 }

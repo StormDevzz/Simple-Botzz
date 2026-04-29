@@ -10,6 +10,8 @@ mod packets;
 mod discord;
 mod ai;
 mod pathfinding;
+mod colors;
+mod bridge;
 
 use anyhow::Result;
 use eframe::egui;
@@ -23,7 +25,10 @@ use windows::{EditorWindow, ConsoleWindow, GeneratorWindow, LogsWindow};
 use packets::PacketManager;
 use discord::DiscordRichPresence;
 use ai::{AIConfig, AIClient};
+use colors::{ThemeManager, ColorPalette};
+use bridge::IPCBridge;
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 
 struct BotManagerApp {
     config: Config,
@@ -51,11 +56,14 @@ struct BotManagerApp {
     show_ai_settings: bool,
     show_discord_settings: bool,
     show_packet_settings: bool,
+    theme_manager: ThemeManager,
+    show_theme_settings: bool,
+    ipc_bridge: IPCBridge,
 }
 
 impl BotManagerApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let data_dir = ".Botzz".to_string();
+        let data_dir = ".js_simple_botzz".to_string();
         let config_path = format!("{}/config.toml", data_dir);
         
         // Создаем папку для данных
@@ -70,6 +78,10 @@ impl BotManagerApp {
         });
         
         let logs_path = format!("{}/logs", data_dir);
+        let theme_config_path = PathBuf::from(format!("{}/theme.json", data_dir));
+        let theme_manager = ThemeManager::new(theme_config_path);
+        let ipc_bridge = IPCBridge::new(54321);
+        let _ = ipc_bridge.start_server();
 
         Self {
             config,
@@ -97,6 +109,9 @@ impl BotManagerApp {
             show_ai_settings: false,
             show_discord_settings: false,
             show_packet_settings: false,
+            theme_manager,
+            show_theme_settings: false,
+            ipc_bridge,
         }
     }
 
@@ -106,17 +121,6 @@ impl BotManagerApp {
 
     fn save_config(&self) -> Result<()> {
         save_toml(&self.config, &self.config_path)
-    }
-
-    fn run_bot(&self, bot: &BotConfig) -> Result<()> {
-        let mut processes = self.bot_processes.lock().unwrap();
-        while processes.len() <= self.config.bots.len() {
-            processes.push(BotProcess::new());
-        }
-        
-        let index = self.config.bots.iter().position(|b| b.id == bot.id).unwrap();
-        processes[index].start(bot, &self.data_dir)?;
-        Ok(())
     }
 
     fn stop_bot(&self, index: usize) {
@@ -131,11 +135,35 @@ impl BotManagerApp {
         for process in processes.iter_mut() {
             process.stop();
         }
+        processes.clear();
         for bot in &mut self.config.bots {
             bot.status = "Остановлен".to_string();
         }
     }
 
+    fn run_bot(&self, bot: &BotConfig) -> Result<()> {
+        let mut processes = self.bot_processes.lock().unwrap();
+        while processes.len() <= self.config.bots.len() {
+            processes.push(BotProcess::new());
+        }
+        
+        let index = self.config.bots.iter().position(|b| b.id == bot.id).unwrap();
+        processes[index].start(bot, &self.data_dir)?;
+        Ok(())
+    }
+}
+
+fn color_picker(ui: &mut egui::Ui, color: &mut crate::colors::Color) {
+    let mut color32 = color.to_egui_color();
+    ui.color_edit_button_srgba(&mut color32);
+    *color = crate::colors::Color {
+        r: color32.r(),
+        g: color32.g(),
+        b: color32.b(),
+    };
+}
+
+impl BotManagerApp {
     fn delete_bot(&mut self, index: usize) {
         self.stop_bot(index);
         // Удаляем файл скрипта если он встроенный
@@ -202,6 +230,11 @@ impl eframe::App for BotManagerApp {
                     use_generated_script: false,
                     auto_login: false,
                     auto_login_password: String::new(),
+                    auto_register: false,
+                    auto_register_password: String::new(),
+                    auto_register_twice: false,
+                    connection_delay: 0,
+                    minecraft_version: "1.20.4".to_string(),
                     auto_messages: vec![],
                 };
                 self.config.bots.push(new_bot);
@@ -232,6 +265,26 @@ impl eframe::App for BotManagerApp {
             ui.separator();
             if ui.button(format!("[PACKETS] {}", self.translator.t("packet_settings"))).clicked() {
                 self.show_packet_settings = true;
+            }
+
+            ui.separator();
+            if ui.button(format!("[THEME] {}", self.translator.t("theme_settings"))).clicked() {
+                self.show_theme_settings = true;
+            }
+
+            ui.separator();
+            let lang_text = if self.translator.get_language() == Language::Russian {
+                "EN"
+            } else {
+                "RU"
+            };
+            if ui.button(format!("[LANG] {}", lang_text)).clicked() {
+                let new_lang = if self.translator.get_language() == Language::Russian {
+                    Language::English
+                } else {
+                    Language::Russian
+                };
+                self.translator.set_language(new_lang);
             }
         });
 
@@ -334,7 +387,7 @@ impl eframe::App for BotManagerApp {
 
                     if bot_use_generated {
                         ui.label(self.translator.t("script_auto_gen"));
-                        if ui.button("[REGEN] Regenerate").clicked() {
+                        if ui.button(format!("[REGEN] {}", self.translator.t("regenerate"))).clicked() {
                             self.config.bots[index].script_content = generate_script_from_params(&self.config.bots[index]);
                             let _ = self.save_config();
                         }
@@ -347,7 +400,7 @@ impl eframe::App for BotManagerApp {
                                 ui.label(self.translator.t("not_specified"));
                             }
                         });
-                        if ui.button("[SELECT FILE] Select File").clicked() {
+                        if ui.button(format!("[SELECT FILE] {}", self.translator.t("select_file"))).clicked() {
                             if let Some(path) = rfd::FileDialog::new()
                                 .add_filter("JavaScript", &["js"])
                                 .pick_file()
@@ -375,10 +428,31 @@ impl eframe::App for BotManagerApp {
                     // Показываем поле пароля если включен авто-логин
                     if self.config.bots[index].auto_login {
                         ui.horizontal(|ui| {
-                            ui.label(self.translator.t("password"));
+                            ui.label(self.translator.t("auto_password"));
                             ui.text_edit_singleline(&mut self.config.bots[index].auto_login_password);
                         });
                     }
+
+                    ui.checkbox(&mut self.config.bots[index].auto_register, &self.translator.t("auto_register"));
+                    
+                    // Показываем поле пароля если включена авто-регистрация
+                    if self.config.bots[index].auto_register {
+                        ui.horizontal(|ui| {
+                            ui.label(self.translator.t("auto_register_password"));
+                            ui.text_edit_singleline(&mut self.config.bots[index].auto_register_password);
+                        });
+                        ui.checkbox(&mut self.config.bots[index].auto_register_twice, &self.translator.t("auto_register_twice"));
+                    }
+
+                    ui.horizontal(|ui| {
+                        ui.label(self.translator.t("connection_delay"));
+                        ui.add(egui::DragValue::new(&mut self.config.bots[index].connection_delay).clamp_range(0..=60));
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label(self.translator.t("minecraft_version"));
+                        ui.text_edit_singleline(&mut self.config.bots[index].minecraft_version);
+                    });
                     
                     ui.label(self.translator.t("auto_messages"));
                     for i in 0..bot_auto_messages.len() {
@@ -393,7 +467,7 @@ impl eframe::App for BotManagerApp {
                             }
                         });
                     }
-                    if ui.button("[+] Add Message").clicked() {
+                    if ui.button(format!("[+] {}", self.translator.t("add_message"))).clicked() {
                         self.config.bots[index].auto_messages.push(String::new());
                         let _ = self.save_config();
                     }
@@ -402,11 +476,28 @@ impl eframe::App for BotManagerApp {
                     ui.label(self.translator.t("enabled_status").replace("{}", &bot_enabled.to_string()));
                     
                     ui.separator();
-                    ui.label(self.translator.t("status_label").replace("{}", &bot_status));
+                    let status_text = if self.translator.get_language() == Language::Russian {
+                        if bot_status == "Запущен" || bot_status == "Running" {
+                            "Запущен".to_string()
+                        } else if bot_status == "Остановлен" || bot_status == "Stopped" {
+                            "Остановлен".to_string()
+                        } else {
+                            bot_status.clone()
+                        }
+                    } else {
+                        if bot_status == "Запущен" || bot_status == "Running" {
+                            "Running".to_string()
+                        } else if bot_status == "Остановлен" || bot_status == "Stopped" {
+                            "Stopped".to_string()
+                        } else {
+                            bot_status.clone()
+                        }
+                    };
+                    ui.label(format!("{}: {}", self.translator.t("status"), status_text));
 
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("[CONSOLE] Console").clicked() {
+                        if ui.button(format!("[CONSOLE] {}", self.translator.t("console"))).clicked() {
                             self.show_console = true;
                             let processes = self.bot_processes.lock().unwrap();
                             if index < processes.len() {
@@ -414,7 +505,7 @@ impl eframe::App for BotManagerApp {
                             }
                         }
                         
-                        if ui.button("[LOGS] Logs").clicked() {
+                        if ui.button(format!("[LOGS] {}", self.translator.t("logs"))).clicked() {
                             if let Some(index) = self.selected_bot {
                                 let bot_id = self.config.bots[index].id.clone();
                                 self.logs_window.selected_bot = Some(bot_id);
@@ -425,28 +516,36 @@ impl eframe::App for BotManagerApp {
 
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("▶ Запустить").clicked() {
+                        if ui.button(format!("▶ {}", self.translator.t("start"))).clicked() {
                             let bot = &self.config.bots[index];
                             match self.run_bot(bot) {
                                 Ok(_) => {
-                                    self.config.bots[index].status = "Запущен".to_string();
+                                    self.config.bots[index].status = if self.translator.get_language() == Language::Russian {
+                                        "Запущен".to_string()
+                                    } else {
+                                        "Running".to_string()
+                                    };
                                 }
                                 Err(e) => {
-                                    self.config.bots[index].status = format!("Ошибка: {}", e);
+                                    self.config.bots[index].status = format!("Error: {}", e);
                                 }
                             }
                         }
 
-                        if ui.button("Остановить").clicked() {
+                        if ui.button(self.translator.t("stop")).clicked() {
                             self.stop_bot(index);
-                            self.config.bots[index].status = "Остановлен".to_string();
+                            self.config.bots[index].status = if self.translator.get_language() == Language::Russian {
+                                "Остановлен".to_string()
+                            } else {
+                                "Stopped".to_string()
+                            };
                         }
 
-                        if ui.button("[SAVE] Сохранить").clicked() {
+                        if ui.button(format!("[SAVE] {}", self.translator.t("save"))).clicked() {
                             let _ = self.save_config();
                         }
 
-                        if ui.button("[DELETE] Delete").clicked() {
+                        if ui.button(format!("[DELETE] {}", self.translator.t("delete"))).clicked() {
                             self.delete_bot(index);
                         }
                     });
@@ -479,7 +578,7 @@ impl eframe::App for BotManagerApp {
                     
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("[SAVE] Сохранить").clicked() {
+                        if ui.button(format!("[SAVE] {}", self.translator.t("save"))).clicked() {
                             if let Some(index) = self.selected_bot {
                                 self.config.bots[index].script_content = self.script_editor.clone();
                                 let _ = self.save_config();
@@ -487,12 +586,12 @@ impl eframe::App for BotManagerApp {
                             self.show_script_editor = false;
                         }
                         
-                        if ui.button("[X] Отменить").clicked() {
+                        if ui.button(format!("[X] {}", self.translator.t("cancel"))).clicked() {
                             self.script_editor = self.script_editor_backup.clone();
                             self.show_script_editor = false;
                         }
                         
-                        if ui.button("[DEL SCRIPT] Delete Script").clicked() {
+                        if ui.button(format!("[DEL SCRIPT] {}", self.translator.t("delete_script"))).clicked() {
                             if let Some(index) = self.selected_bot {
                                 self.config.bots[index].script_content = String::new();
                                 let _ = self.save_config();
@@ -501,7 +600,7 @@ impl eframe::App for BotManagerApp {
                         }
                         
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("[X] Закрыть").clicked() {
+                            if ui.button(format!("[X] {}", self.translator.t("close"))).clicked() {
                                 self.show_script_editor = false;
                             }
                         });
@@ -511,7 +610,7 @@ impl eframe::App for BotManagerApp {
 
         // Окно консоли бота
         if self.show_console {
-            egui::Window::new("Консоль бота")
+            egui::Window::new(self.translator.t("console_output"))
                 .collapsible(false)
                 .resizable(true)
                 .default_size([800.0, 500.0])
@@ -527,7 +626,7 @@ impl eframe::App for BotManagerApp {
                     
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("[REFRESH] Refresh").clicked() {
+                        if ui.button(format!("[REFRESH] {}", self.translator.t("update"))).clicked() {
                             if let Some(index) = self.selected_bot {
                                 let processes = self.bot_processes.lock().unwrap();
                                 if index < processes.len() {
@@ -536,12 +635,12 @@ impl eframe::App for BotManagerApp {
                             }
                         }
                         
-                        if ui.button("[CLEAR] Clear").clicked() {
+                        if ui.button(format!("[CLEAR] {}", self.translator.t("clear"))).clicked() {
                             self.console_output.clear();
                         }
                         
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("[X] Закрыть").clicked() {
+                            if ui.button(format!("[X] {}", self.translator.t("close"))).clicked() {
                                 self.show_console = false;
                             }
                         });
@@ -551,7 +650,7 @@ impl eframe::App for BotManagerApp {
 
         // Окно генератора ботов
         if self.show_generator {
-            egui::Window::new("Генератор ботов")
+            egui::Window::new(self.translator.t("generator"))
                 .collapsible(false)
                 .resizable(true)
                 .default_size([600.0, 500.0])
@@ -563,7 +662,11 @@ impl eframe::App for BotManagerApp {
                         ui.add_sized(
                             [ui.available_width(), 150.0],
                             egui::TextEdit::multiline(&mut self.generator_prompt)
-                                .hint_text("Введите описание бота...")
+                                .hint_text(if self.translator.get_language() == Language::Russian {
+                                    "Введите описание бота..."
+                                } else {
+                                    "Enter bot description..."
+                                })
                         );
                     });
                     
@@ -576,20 +679,32 @@ impl eframe::App for BotManagerApp {
                     
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("[GENERATE] Generate").clicked() {
-                            self.generator_status = "Анализ промпта...".to_string();
+                        if ui.button(format!("[GENERATE] {}", self.translator.t("generate"))).clicked() {
+                            self.generator_status = if self.translator.get_language() == Language::Russian {
+                                "Анализ промпта...".to_string()
+                            } else {
+                                "Analyzing prompt...".to_string()
+                            };
                             self.generator_progress = 0.3;
                             
                             match parse_prompt(&self.generator_prompt) {
                                 Ok(params) => {
-                                    self.generator_status = "Проверка сервера...".to_string();
+                                    self.generator_status = if self.translator.get_language() == Language::Russian {
+                                        "Проверка сервера...".to_string()
+                                    } else {
+                                        "Checking server...".to_string()
+                                    };
                                     self.generator_progress = 0.5;
                                     
                                     let result = check_server(&params.server, params.port);
                                     self.server_check_result = Some(result.clone());
                                     
                                     if result.reachable {
-                                        self.generator_status = format!("Сервер доступен! Пинг: {}мс", result.latency_ms.unwrap_or(0));
+                                        self.generator_status = if self.translator.get_language() == Language::Russian {
+                                            format!("Сервер доступен! Пинг: {}мс", result.latency_ms.unwrap_or(0))
+                                        } else {
+                                            format!("Server available! Ping: {}ms", result.latency_ms.unwrap_or(0))
+                                        };
                                         self.generator_progress = 0.7;
                                         
                                         let new_bot = build_bot_from_prompt(params, self.config.bots.len());
@@ -599,25 +714,41 @@ impl eframe::App for BotManagerApp {
                                         if check_result.valid {
                                             self.config.bots.push(new_bot);
                                             let _ = self.save_config();
-                                            self.generator_status = "Бот успешно создан!".to_string();
+                                            self.generator_status = if self.translator.get_language() == Language::Russian {
+                                                "Бот успешно создан!".to_string()
+                                            } else {
+                                                "Bot created successfully!".to_string()
+                                            };
                                             self.generator_progress = 1.0;
                                         } else {
-                                            self.generator_status = format!("Ошибки конфигурации: {:?}", check_result.errors);
+                                            self.generator_status = if self.translator.get_language() == Language::Russian {
+                                                format!("Ошибки конфигурации: {:?}", check_result.errors)
+                                            } else {
+                                                format!("Configuration errors: {:?}", check_result.errors)
+                                            };
                                             self.generator_progress = 0.0;
                                         }
                                     } else {
-                                        self.generator_status = format!("Сервер недоступен: {}", result.error.unwrap_or_default());
+                                        self.generator_status = if self.translator.get_language() == Language::Russian {
+                                            format!("Сервер недоступен: {}", result.error.unwrap_or_default())
+                                        } else {
+                                            format!("Server unavailable: {}", result.error.unwrap_or_default())
+                                        };
                                         self.generator_progress = 0.0;
                                     }
                                 }
                                 Err(e) => {
-                                    self.generator_status = format!("Ошибка парсинга: {}", e);
+                                    self.generator_status = if self.translator.get_language() == Language::Russian {
+                                        format!("Ошибка парсинга: {}", e)
+                                    } else {
+                                        format!("Parsing error: {}", e)
+                                    };
                                     self.generator_progress = 0.0;
                                 }
                             }
                         }
                         
-                        if ui.button("[X] Отменить").clicked() {
+                        if ui.button(format!("[X] {}", self.translator.t("cancel"))).clicked() {
                             self.show_generator = false;
                             self.generator_prompt.clear();
                             self.generator_status.clear();
@@ -761,6 +892,55 @@ impl eframe::App for BotManagerApp {
                     } else {
                         ui.label("[X] Not connected to Discord");
                     }
+                });
+        }
+
+        // Окно настроек темы
+        if self.show_theme_settings {
+            egui::Window::new(self.translator.t("theme_settings"))
+                .collapsible(false)
+                .resizable(true)
+                .default_size([400.0, 500.0])
+                .show(ctx, |ui| {
+                    let mut palette = self.theme_manager.get_palette();
+                    
+                    ui.label(self.translator.t("background_color"));
+                    color_picker(ui, &mut palette.background);
+                    
+                    ui.label(self.translator.t("panel_color"));
+                    color_picker(ui, &mut palette.panel);
+                    
+                    ui.label(self.translator.t("text_color"));
+                    color_picker(ui, &mut palette.text);
+                    
+                    ui.label(self.translator.t("accent_color"));
+                    color_picker(ui, &mut palette.accent);
+                    
+                    ui.label(self.translator.t("button_color"));
+                    color_picker(ui, &mut palette.button);
+                    
+                    ui.label(self.translator.t("border_color"));
+                    color_picker(ui, &mut palette.border);
+                    
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("[APPLY] Apply").clicked() {
+                            self.theme_manager.set_palette(palette.clone());
+                            let _ = self.theme_manager.save();
+                            ctx.set_style(palette.to_egui_style());
+                        }
+                        
+                        if ui.button("[RESET] Reset").clicked() {
+                            let default_palette = ColorPalette::default();
+                            self.theme_manager.set_palette(default_palette.clone());
+                            let _ = self.theme_manager.save();
+                            ctx.set_style(default_palette.to_egui_style());
+                        }
+                        
+                        if ui.button("[X] Close").clicked() {
+                            self.show_theme_settings = false;
+                        }
+                    });
                 });
         }
 
