@@ -1,0 +1,22 @@
+{
+  "server": "localhost",
+  "port": 25565,
+  "bots": [
+    {
+      "id": "bot1",
+      "name": "TestBot",
+      "server": "localhost",
+      "port": 25565,
+      "accountType": "offline",
+      "username": "TestBot",
+      "password": "",
+      "autoLogin": false,
+      "autoLoginPassword": "",
+      "autoMessages": [
+        "Hello everyone!",
+        "I am a bot"
+      ],
+      "enabled": true
+    }
+  ]
+}

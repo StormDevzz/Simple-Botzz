@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Js Simple Botzz
+Comment=Менеджер ботов на Node.js
+Exec=/home/abrakadam/JsSimpleBotzz/platforms/linux/target/release/js_simple_botzz_linux
+Icon=/home/abrakadam/JsSimpleBotzz/assets/Minecraft.png
+Terminal=false
+Categories=Utility;Application;
+StartupNotify=true

@@ -1,0 +1,24 @@
+# Конфигурация JsSimpleBotzz
+
+# Сервер по умолчанию для всех ботов
+server = "localhost"
+
+# Порт по умолчанию для всех ботов
+port = 8080
+
+# Список ботов
+[[bots]]
+id = "bot1"
+name = "TestBot"
+script_path = "scripts/bot1.js"
+server = "localhost"
+port = 8080
+enabled = true
+
+[[bots]]
+id = "bot2"
+name = "ChatBot"
+script_path = "scripts/bot2.js"
+server = "localhost"
+port = 8081
+enabled = false

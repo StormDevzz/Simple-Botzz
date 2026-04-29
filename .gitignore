@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Data directories
+.Botzz/
+bot_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
+nodejs/node_modules/
+
+# Logs
+*.log
+logs/
+
+# Config files (optional - uncomment if you don't want to share config)
+# config.json
+# platforms/linux/.Botzz/config.toml
+target/
